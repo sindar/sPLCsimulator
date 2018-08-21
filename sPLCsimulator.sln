@@ -14,4 +14,9 @@ Global
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		Policies = $0
+		$0.DotNetNamingPolicy = $1
+		$1.DirectoryNamespaceAssociation = PrefixedHierarchical
+	EndGlobalSection
 EndGlobal

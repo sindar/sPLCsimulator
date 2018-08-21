@@ -52,7 +52,7 @@ namespace sPLCsimulator
 
             try
             {
-                server.Listen(100);
+                server.Listen(10);
             }
             catch (Exception ex)
             {
@@ -61,9 +61,12 @@ namespace sPLCsimulator
                 return false;
             }
 
-
-            server.BeginAccept(new AsyncCallback(AsyncAcceptCallback), server);
             return true;
+        }
+
+        public void AcceptConnections()
+        {
+            server.BeginAccept(new AsyncCallback(AsyncAcceptCallback), server);
         }
 
         private void AsyncAcceptCallback(IAsyncResult result)
@@ -74,7 +77,11 @@ namespace sPLCsimulator
             socketData.ClientConnection = serverSocket.EndAccept(result);
 
             Console.WriteLine("Client connected...");
-            socketData.ClientConnection.BeginReceive(socketData.Buffer, 0, SocketData.BufferSize, SocketFlags.None, new AsyncCallback(ReadCallback), socketData);
+            socketData.ClientConnection.BeginReceive(socketData.Buffer, 0, 
+                                                     SocketData.BufferSize,
+                                                     SocketFlags.None, 
+                                                     new AsyncCallback(ReadCallback), 
+                                                     socketData);
         }
 
         private void ReadCallback(IAsyncResult result)
@@ -99,7 +106,7 @@ namespace sPLCsimulator
                 Byte[] transmitData = new Byte[9 + dataLength * 2];
                 UInt16 remainBytes = (UInt16)(3 + dataLength * 2);
 
-                //======Preparing Preambula Begin=========
+                //======Preparing Header=========
                 for (int i = 0; i < 4; ++i)
                     transmitData[i] = receivedData[i];
 
@@ -108,7 +115,7 @@ namespace sPLCsimulator
 
                 transmitData[6] = receivedData[6]; //Unit ID
                 transmitData[7] = receivedData[7]; //Function Code
-                                                   //======Preparing Preambula End  =========
+                //======Preparing Header=========
 
                 transmitData[8] = (Byte)(dataLength * 2); //Bytes count
 
@@ -123,6 +130,8 @@ namespace sPLCsimulator
                 socketData.ClientConnection.Send(transmitData);
             }
 
+            ++HoldingRegs[0];
+            socketData.ClientConnection.Disconnect(false);
             server.BeginAccept(new AsyncCallback(AsyncAcceptCallback), server);
         }
     }
