@@ -1,20 +1,29 @@
 ﻿using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 
 namespace sPLCsimulator
 {
     public class ModBusTCPServer
     {
+        private const uint CLIENT_TIMEOUT = 5000;
+        private const uint MAX_CONNECTIONS = 10;
+
+        private ManualResetEvent queryDone = new ManualResetEvent(false);
+        private ManualResetEvent disconnectDone = new ManualResetEvent(false);
         private Socket server = null;
         private UInt16[] HoldingRegs = new UInt16[65536];
+        private Timer processingTimer;
+        private uint connectionsCount = 0;
 
-        private class SocketData
+        private class ClientHandler
         {
             public const int BufferSize = 256;
-
             public Socket ClientConnection { get; set; }
-
+            public Timer noActivityTimer;
+            public bool timeOut = false;
+            public int activityCount = 0;
             byte[] buffer = new byte[BufferSize];
 
             public byte[] Buffer
@@ -45,60 +54,93 @@ namespace sPLCsimulator
             }
             catch (Exception ex)
             {
-                // TODO: Log start listening error
-                Console.WriteLine("Error binding socket!" + ex.Message);
+                Console.WriteLine("Error binding socket!" + ex.Message
+                                  + DateTime.Now);
                 return false;
             }
 
             try
             {
-                server.Listen(10);
+                server.Listen(20);
             }
             catch (Exception ex)
             {
-                // TODO: Log start listening error
-                Console.WriteLine("Error, cannot start listening!" + ex.Message);
+                Console.WriteLine("Error, cannot start listening!" + ex.Message
+                                  + DateTime.Now);
                 return false;
             }
 
+            processingTimer = new Timer(ProcessingTimerCallback,
+                                        this,
+                                        1000,
+                                        1000);
             return true;
         }
 
-        public void AcceptConnections()
+        private void ProcessingTimerCallback(object state)
+        {
+            ModBusTCPServer thisServer = (ModBusTCPServer)state;
+            if (thisServer.connectionsCount < MAX_CONNECTIONS)
+            {
+                AcceptConnections();
+                ++connectionsCount;
+            }
+        }
+
+        private void AcceptConnections()
         {
             server.BeginAccept(new AsyncCallback(AsyncAcceptCallback), server);
         }
 
-        private void AsyncAcceptCallback(IAsyncResult result)
+        private void AsyncAcceptCallback(IAsyncResult ar)
         {
-            Socket serverSocket = (Socket)result.AsyncState;
+            Socket serverSocket = (Socket)ar.AsyncState;
 
-            SocketData socketData = new SocketData();
-            socketData.ClientConnection = serverSocket.EndAccept(result);
+            ClientHandler clientHandler = new ClientHandler();
+            clientHandler.ClientConnection = serverSocket.EndAccept(ar);
+            Console.WriteLine("Client connected: " + DateTime.Now);
 
-            Console.WriteLine("Client connected...");
-            socketData.ClientConnection.BeginReceive(socketData.Buffer, 0, 
-                                                     SocketData.BufferSize,
+            clientHandler.timeOut = false;
+            clientHandler.noActivityTimer = new Timer(NoActivityTimerCallback, 
+                                                      clientHandler,
+                                                      CLIENT_TIMEOUT,
+                                                      CLIENT_TIMEOUT);
+
+            queryDone.Reset();
+            clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0, 
+                                                     ClientHandler.BufferSize,
                                                      SocketFlags.None, 
-                                                     new AsyncCallback(ReadCallback), 
-                                                     socketData);
+                                                     new AsyncCallback(ReceiveCallback), 
+                                                     clientHandler);
         }
 
-        private void ReadCallback(IAsyncResult result)
+        void NoActivityTimerCallback(object state)
         {
-            SocketData socketData = (SocketData)result.AsyncState;
-            int bytes = socketData.ClientConnection.EndReceive(result);
-            byte[] receivedData = socketData.Buffer;
+            ClientHandler clientHandler = (ClientHandler)state;
+            if (--clientHandler.activityCount < 0)
+            {
+                clientHandler.timeOut = true;
+                queryDone.Set();
+                Console.WriteLine("No activity from client, closing socket: " 
+                                   + DateTime.Now);
+                clientHandler.ClientConnection.Shutdown(SocketShutdown.Both);
+                clientHandler.ClientConnection.Close();
+                --connectionsCount;
+                clientHandler.noActivityTimer.Dispose();
+            }
+        }
 
-            Console.WriteLine("Received request...");
+        private void ReceiveCallback(IAsyncResult ar)
+        {
+            ClientHandler clientHandler = (ClientHandler)ar.AsyncState;
+            int bytes = clientHandler.ClientConnection.EndReceive(ar);
+            byte[] receivedData = clientHandler.Buffer;
+
+            clientHandler.activityCount = 1;
+            //Console.WriteLine("Query received: " + DateTime.Now);
 
             if (bytes > 0)
             {
-                // TODO response
-                //ответ-заглушка клиенту
-                //byte[] reply = new byte[1] {1};
-                //data.ClientConnection.Send(reply);
-
                 UInt16 dataLength = (UInt16)((UInt16)(receivedData[10] << 8) 
                                               | (UInt16)receivedData[11]);
                 UInt16 firstregister = (UInt16)((UInt16)(receivedData[8] << 8) 
@@ -127,12 +169,41 @@ namespace sPLCsimulator
                 }
                 //======Data======
 
-                socketData.ClientConnection.Send(transmitData);
-            }
+                clientHandler.ClientConnection.BeginSend(transmitData, 0,
+                                                      transmitData.Length,
+                                                      SocketFlags.None,
+                                                      new AsyncCallback(SendCallback),
+                                                      clientHandler);
 
-            ++HoldingRegs[0];
-            socketData.ClientConnection.Disconnect(false);
-            server.BeginAccept(new AsyncCallback(AsyncAcceptCallback), server);
+                queryDone.WaitOne();
+                if (!clientHandler.timeOut)
+                {
+                    clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
+                                                         ClientHandler.BufferSize,
+                                                         SocketFlags.None,
+                                                         new AsyncCallback(ReceiveCallback),
+                                                         clientHandler);
+                } else {
+                    Console.WriteLine("Timeout: " + DateTime.Now);
+                }
+            }
         }
+
+        private void SendCallback(IAsyncResult ar)
+        {
+            try
+            { 
+                ClientHandler clientHandler = (ClientHandler)ar.AsyncState;
+                int bytesSent = clientHandler.ClientConnection.EndSend(ar);
+
+                ++HoldingRegs[0];
+                queryDone.Set();
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+            }
+        }
+
     }
 }

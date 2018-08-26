@@ -8,9 +8,9 @@ namespace sPLCsimulator
         {
             ModBusTCPServer MBTCPServer = new ModBusTCPServer();
             MBTCPServer.StartServer();
-            Console.WriteLine("ModBusTCP server is started...");
-            MBTCPServer.AcceptConnections();
-            for (; ; );
+            Console.WriteLine("ModBusTCP server is started: " + DateTime.Now);
+            for (; ; )
+                ;
         }
     }
 }
