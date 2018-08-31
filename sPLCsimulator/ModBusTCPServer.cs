@@ -16,7 +16,7 @@ namespace sPLCsimulator
 
         private ManualResetEvent queryDone = new ManualResetEvent(false);
         private Socket server = null;
-        private UInt16[] HoldingRegs = new UInt16[65536];
+        private ushort[] HoldingRegs = new ushort[65536];
         private Timer processingTimer;
         private uint connectionsCount = 0;
 
@@ -45,7 +45,7 @@ namespace sPLCsimulator
         public ModBusTCPServer()
         {
             for (int i = 0; i < 65536; ++i)
-                HoldingRegs[i] = (UInt16)(i + 1);
+                HoldingRegs[i] = (ushort)(i + 1);
         }
 
         public bool StartServer()
@@ -84,6 +84,8 @@ namespace sPLCsimulator
                 = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>(); 
             modBusFunctions.Add(ModBusFunctionCodes.ReadHoldingRegs,
                                 ReadHoldingRegs);
+            modBusFunctions.Add(ModBusFunctionCodes.WriteMultipleHoldingRegs,
+                                WriteMultipleHoldingRegs);
 
             processingTimer = new Timer(ProcessingTimerCallback,
                                         this,
@@ -229,7 +231,7 @@ namespace sPLCsimulator
             transmitData[5] = 3;
 
             transmitData[6] = receivedData[6]; //Unit ID
-            transmitData[7] = (byte)(receivedData[7] & 0x80); //Function Code
+            transmitData[7] = (byte)(receivedData[7] | 0x80); //Function Code
             //======Preparing Header=========
 
             transmitData[8] = (byte)exCode; //Illegal Function Exception Code
@@ -239,28 +241,23 @@ namespace sPLCsimulator
 
         private byte[] ReadHoldingRegs(byte[] receivedData)
         {
-            UInt16 dataLength = (UInt16)((UInt16)(receivedData[10] << 8)
-                                              | (UInt16)receivedData[11]);
-            UInt16 firstregister = (UInt16)((UInt16)(receivedData[8] << 8)
-                                             | (UInt16)receivedData[9]);
+            ushort dataLength = (ushort)((ushort)(receivedData[10] << 8)
+                                              | (ushort)receivedData[11]);
+            ushort firstRegister = (ushort)((ushort)(receivedData[8] << 8)
+                                             | (ushort)receivedData[9]);
             byte[] transmitData = new byte[9 + dataLength * 2];
-            UInt16 remainBytes = (UInt16)(3 + dataLength * 2);
+            ushort remainBytes = (ushort)(3 + dataLength * 2);
 
             //======Preparing Header=========
-            for (int i = 0; i < 4; ++i)
-                transmitData[i] = receivedData[i];
-
+            CopyCommonMBHeaderPart(receivedData, ref transmitData);
             transmitData[4] = (byte)(remainBytes >> 8);
             transmitData[5] = (byte)remainBytes;
-
-            transmitData[6] = receivedData[6]; //Unit ID
-            transmitData[7] = receivedData[7]; //Function Code
-                                               //======Preparing Header=========
+            //======Preparing Header=========
 
             transmitData[8] = (byte)(dataLength * 2); //Bytes count
 
             //======Data======
-            for (int i = firstregister, j = 0; i < firstregister + dataLength; ++i)
+            for (int i = firstRegister, j = 0; i < firstRegister + dataLength; ++i)
             {
                 transmitData[9 + j++] = (byte)(HoldingRegs[i] >> 8);
                 transmitData[9 + j++] = (byte)HoldingRegs[i];
@@ -269,6 +266,56 @@ namespace sPLCsimulator
 
             return transmitData;
         }
+
+        private byte[] WriteMultipleHoldingRegs(byte[] receivedData)
+        {
+            const byte valuesStart = 13;
+            ushort firstRegister = (ushort)((ushort)(receivedData[8] << 8)
+                                             | (ushort)receivedData[9]);
+            ushort registersCount = (ushort)((ushort)(receivedData[10] << 8)
+                                  | (ushort)receivedData[11]);
+            byte bytesCount = receivedData[12];
+            byte[] transmitData = new byte[12];
+
+            //======Preparing Header=========
+            CopyCommonMBHeaderPart(receivedData, ref transmitData);
+            transmitData[4] = 0;
+            transmitData[5] = 6;
+            //======Preparing Header=========
+
+            for (int i = 8; i < 12; ++i)
+                transmitData[i] = receivedData[i];
+
+            if (((UInt32)firstRegister + (UInt32)registersCount) > 65535)
+                return ExceptionResponse(receivedData, 
+                                         ModBusExceptionCodes.IllegalDataAddress);
+
+            if(receivedData.Length < (valuesStart + bytesCount))
+                return ExceptionResponse(receivedData, 
+                                         ModBusExceptionCodes.IllegalDataValue);
+                                         
+            ushort j = firstRegister;
+            for (byte i = valuesStart; i < valuesStart + bytesCount; i += 2)
+            {
+                HoldingRegs[j] = (ushort)((ushort)receivedData[i] << 8
+                                          | (ushort)receivedData[i + 1]);
+                ++j;
+            }
+
+            return transmitData;
+        }
+
+        private void CopyCommonMBHeaderPart(byte[] receivedData, 
+                                            ref byte[] transmitData)
+        {
+            //Transaction and Protocol ID's
+            for (int i = 0; i < 4; ++i)
+                transmitData[i] = receivedData[i];
+
+            transmitData[6] = receivedData[6]; //Unit ID
+            transmitData[7] = receivedData[7]; //Function Code
+        }
+
         #endregion
 
     }
