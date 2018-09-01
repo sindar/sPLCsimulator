@@ -17,6 +17,7 @@ namespace sPLCsimulator
         private ManualResetEvent queryDone = new ManualResetEvent(false);
         private Socket server = null;
         private ushort[] HoldingRegs = new ushort[65536];
+        private ushort[] InputRegs = new ushort[65536];
         private Timer processingTimer;
         private uint connectionsCount = 0;
 
@@ -79,11 +80,13 @@ namespace sPLCsimulator
                 return false;
             }
 
-            //modBusFunctions = new Dictionary<byte, Func<byte[], byte[]>>();
             modBusFunctions 
-                = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>(); 
+                = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>();
+
             modBusFunctions.Add(ModBusFunctionCodes.ReadHoldingRegs,
-                                ReadHoldingRegs);
+                                ReadHoldingAndInputRegs);
+            modBusFunctions.Add(ModBusFunctionCodes.ReadInputRegs,
+                                ReadHoldingAndInputRegs);
             modBusFunctions.Add(ModBusFunctionCodes.WriteMultipleHoldingRegs,
                                 WriteMultipleHoldingRegs);
 
@@ -239,32 +242,48 @@ namespace sPLCsimulator
             return transmitData;
         }
 
-        private byte[] ReadHoldingRegs(byte[] receivedData)
+        private byte[] ReadHoldingAndInputRegs(byte[] receivedData)
         {
-            ushort dataLength = (ushort)((ushort)(receivedData[10] << 8)
+            ushort registersCount = (ushort)((ushort)(receivedData[10] << 8)
                                               | (ushort)receivedData[11]);
             ushort firstRegister = (ushort)((ushort)(receivedData[8] << 8)
                                              | (ushort)receivedData[9]);
-            byte[] transmitData = new byte[9 + dataLength * 2];
-            ushort remainBytes = (ushort)(3 + dataLength * 2);
+            byte[] transmitData = new byte[9 + registersCount * 2];
+            ushort remainBytes = (ushort)(3 + registersCount * 2);
+
+            if (((UInt32)firstRegister + (UInt32)registersCount) > 65535)
+                return ExceptionResponse(receivedData,
+                                         ModBusExceptionCodes.IllegalDataAddress);
 
             //======Preparing Header=========
-            CopyCommonMBHeaderPart(receivedData, ref transmitData);
+            CopyCommonMBHeaderPart(receivedData, transmitData);
             transmitData[4] = (byte)(remainBytes >> 8);
             transmitData[5] = (byte)remainBytes;
             //======Preparing Header=========
 
-            transmitData[8] = (byte)(dataLength * 2); //Bytes count
+            transmitData[8] = (byte)(registersCount * 2); //Bytes count
 
             //======Data======
-            for (int i = firstRegister, j = 0; i < firstRegister + dataLength; ++i)
+            if (receivedData[7] == 0x3)
             {
-                transmitData[9 + j++] = (byte)(HoldingRegs[i] >> 8);
-                transmitData[9 + j++] = (byte)HoldingRegs[i];
+                CopyRegsForTransmit(HoldingRegs, firstRegister, registersCount,
+                                    transmitData);
+            } else {
+                CopyRegsForTransmit(InputRegs, firstRegister, registersCount,
+                                    transmitData);
             }
-            //======Data======
 
             return transmitData;
+        }
+
+        private void CopyRegsForTransmit(ushort[] regs, int firstRegister,
+                                         int registersCount, byte[] transmitData)
+        {
+            for (int i = firstRegister, j = 0; i < firstRegister + registersCount; ++i)
+            {
+                transmitData[9 + j++] = (byte)(regs[i] >> 8);
+                transmitData[9 + j++] = (byte)regs[i];
+            }
         }
 
         private byte[] WriteMultipleHoldingRegs(byte[] receivedData)
@@ -278,7 +297,7 @@ namespace sPLCsimulator
             byte[] transmitData = new byte[12];
 
             //======Preparing Header=========
-            CopyCommonMBHeaderPart(receivedData, ref transmitData);
+            CopyCommonMBHeaderPart(receivedData, transmitData);
             transmitData[4] = 0;
             transmitData[5] = 6;
             //======Preparing Header=========
@@ -305,8 +324,7 @@ namespace sPLCsimulator
             return transmitData;
         }
 
-        private void CopyCommonMBHeaderPart(byte[] receivedData, 
-                                            ref byte[] transmitData)
+        private void CopyCommonMBHeaderPart(byte[] receivedData, byte[] transmitData)
         {
             //Transaction and Protocol ID's
             for (int i = 0; i < 4; ++i)
