@@ -5,6 +5,7 @@ namespace sPLCsimulator
     {
         ReadHoldingRegs = 3,
         ReadInputRegs = 4,
+        WriteSingleReg = 6,
         WriteMultipleHoldingRegs = 16
     }
 }

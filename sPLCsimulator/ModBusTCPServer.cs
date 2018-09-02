@@ -87,6 +87,8 @@ namespace sPLCsimulator
                                 ReadHoldingAndInputRegs);
             modBusFunctions.Add(ModBusFunctionCodes.ReadInputRegs,
                                 ReadHoldingAndInputRegs);
+            modBusFunctions.Add(ModBusFunctionCodes.WriteSingleReg,
+                                WriteSingleReg);
             modBusFunctions.Add(ModBusFunctionCodes.WriteMultipleHoldingRegs,
                                 WriteMultipleHoldingRegs);
 
@@ -284,6 +286,22 @@ namespace sPLCsimulator
                 transmitData[9 + j++] = (byte)(regs[i] >> 8);
                 transmitData[9 + j++] = (byte)regs[i];
             }
+        }
+
+        private byte[] WriteSingleReg(byte[] receivedData)
+        {
+            byte bytesCount = receivedData[12];
+            byte[] transmitData = new byte[12];
+            ushort registerNumber = (ushort)((ushort)(receivedData[8] << 8)
+                                             | (ushort)receivedData[9]);
+
+            HoldingRegs[registerNumber] = (ushort)((ushort)receivedData[10] << 8
+                                          | (ushort)receivedData[11]);
+
+            for (int i = 0; i < 12; ++i)
+                transmitData[i] = receivedData[i];
+
+            return transmitData;
         }
 
         private byte[] WriteMultipleHoldingRegs(byte[] receivedData)
