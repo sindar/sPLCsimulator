@@ -8,27 +8,28 @@ namespace sPLCsimulator
 {
     public class ModBusTCPServer
     {
-        private const uint CLIENT_TIMEOUT = 5000;
-        private const uint MAX_CONNECTIONS = 10;
+        const uint CLIENT_TIMEOUT = 5000;
+        const uint MAX_CONNECTIONS = 10;
 
-        //private Dictionary<byte, Func<byte[], byte[]>> modBusFunctions;
-        private Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>> modBusFunctions;
+        Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>> modBusFunctions;
 
-        private ManualResetEvent queryDone = new ManualResetEvent(false);
-        private Socket server = null;
-        private ushort[] HoldingRegs = new ushort[65536];
-        private ushort[] InputRegs = new ushort[65536];
-        private Timer processingTimer;
-        private uint connectionsCount = 0;
+        ManualResetEvent queryDone = new ManualResetEvent(false);
+        Socket server = null;
+        ushort[] HoldingRegs = new ushort[65536];
+        ushort[] InputRegs = new ushort[65536];
+        Timer processingTimer;
+        uint connectionsCount = 0;
+
+        Queue<WriteQueueItem> writeQueue;
 
         private class ClientHandler
         {
-            public const int BufferSize = 256;
+            public const int BUFFER_SIZE = 256;
             public Socket ClientConnection { get; set; }
             public Timer noActivityTimer;
             public bool timeOut = false;
             public int activityCount = 0;
-            byte[] buffer = new byte[BufferSize];
+            byte[] buffer = new byte[BUFFER_SIZE];
 
             public byte[] Buffer
             {
@@ -43,12 +44,27 @@ namespace sPLCsimulator
             }
         }
 
-        public ModBusTCPServer()
+        private class WriteQueueItem
         {
-            for (int i = 0; i < 65536; ++i)
-                HoldingRegs[i] = (ushort)(i + 1);
+            ClientHandler clientHandler;
+            byte[] receivedData;
         }
 
+        public ModBusTCPServer()
+        {
+            writeQueue = new Queue<WriteQueueItem>();
+
+            modBusFunctions
+                = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>();
+            modBusFunctions.Add(ModBusFunctionCodes.ReadHoldingRegs,
+                                ReadHoldingAndInputRegs);
+            modBusFunctions.Add(ModBusFunctionCodes.ReadInputRegs,
+                                ReadHoldingAndInputRegs);
+            modBusFunctions.Add(ModBusFunctionCodes.WriteSingleReg,
+                                WriteSingleReg);
+            modBusFunctions.Add(ModBusFunctionCodes.WriteMultipleHoldingRegs,
+                                WriteMultipleHoldingRegs);
+        }
         public bool StartServer()
         {
             if (server != null && server.Connected)
@@ -80,23 +96,17 @@ namespace sPLCsimulator
                 return false;
             }
 
-            modBusFunctions 
-                = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>();
-
-            modBusFunctions.Add(ModBusFunctionCodes.ReadHoldingRegs,
-                                ReadHoldingAndInputRegs);
-            modBusFunctions.Add(ModBusFunctionCodes.ReadInputRegs,
-                                ReadHoldingAndInputRegs);
-            modBusFunctions.Add(ModBusFunctionCodes.WriteSingleReg,
-                                WriteSingleReg);
-            modBusFunctions.Add(ModBusFunctionCodes.WriteMultipleHoldingRegs,
-                                WriteMultipleHoldingRegs);
-
             processingTimer = new Timer(ProcessingTimerCallback,
                                         this,
                                         1000,
                                         1000);
             return true;
+        }
+
+        public void MakeRegsCopy(ushort[] holdingRegs, ushort[] inputRegs)
+        {
+            Array.Copy(holdingRegs, HoldingRegs, holdingRegs.Length);
+            Array.Copy(inputRegs, InputRegs, inputRegs.Length);
         }
 
         private void ProcessingTimerCallback(object state)
@@ -130,7 +140,7 @@ namespace sPLCsimulator
 
             queryDone.Reset();
             clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
-                                                     ClientHandler.BufferSize,
+                                                     ClientHandler.BUFFER_SIZE,
                                                      SocketFlags.None,
                                                      new AsyncCallback(ReceiveCallback),
                                                      clientHandler);
@@ -194,7 +204,7 @@ namespace sPLCsimulator
                 if (!clientHandler.timeOut)
                 {
                     clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
-                                                         ClientHandler.BufferSize,
+                                                         ClientHandler.BUFFER_SIZE,
                                                          SocketFlags.None,
                                                          new AsyncCallback(ReceiveCallback),
                                                          clientHandler);
@@ -212,8 +222,6 @@ namespace sPLCsimulator
             {
                 ClientHandler clientHandler = (ClientHandler)ar.AsyncState;
                 int bytesSent = clientHandler.ClientConnection.EndSend(ar);
-
-                ++HoldingRegs[0];
                 queryDone.Set();
             }
             catch (Exception e)
