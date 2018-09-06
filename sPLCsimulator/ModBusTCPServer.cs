@@ -13,10 +13,11 @@ namespace sPLCsimulator
 
         Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>> modBusFunctions;
 
-        ManualResetEvent queryDone = new ManualResetEvent(false);
         Socket server = null;
-        ushort[] HoldingRegs = new ushort[65536];
-        ushort[] InputRegs = new ushort[65536];
+
+        ushort[] HoldingRegs;
+        ushort[] InputRegs;
+
         Timer processingTimer;
         uint connectionsCount = 0;
 
@@ -29,7 +30,9 @@ namespace sPLCsimulator
             public Timer noActivityTimer;
             public bool timeOut = false;
             public int activityCount = 0;
+            public ManualResetEvent queryDone = new ManualResetEvent(false);
             byte[] buffer = new byte[BUFFER_SIZE];
+            
 
             public byte[] Buffer
             {
@@ -46,13 +49,23 @@ namespace sPLCsimulator
 
         private class WriteQueueItem
         {
-            ClientHandler clientHandler;
-            byte[] receivedData;
+            public ClientHandler clientHandler;
+            public byte[] receivedData;
+
+            public WriteQueueItem(ClientHandler clnHandler, byte[] rcvData)
+            {
+                clientHandler = clnHandler;
+                receivedData = rcvData;
+            }
         }
 
-        public ModBusTCPServer()
+        public ModBusTCPServer(ushort[] holdingRegs, ushort[] inputRegs)
         {
             writeQueue = new Queue<WriteQueueItem>();
+
+            // DANGER! TODO: need to find better solution
+            HoldingRegs = holdingRegs;
+            InputRegs = inputRegs;
 
             modBusFunctions
                 = new Dictionary<ModBusFunctionCodes, Func<byte[], byte[]>>();
@@ -103,10 +116,50 @@ namespace sPLCsimulator
             return true;
         }
 
-        public void MakeRegsCopy(ushort[] holdingRegs, ushort[] inputRegs)
+        //public void MakeRegsCopy(ushort[] holdingRegs, ushort[] inputRegs)
+        //{
+        //    try
+        //    {
+        //        Array.Copy(holdingRegs, HoldingRegs, holdingRegs.Length);
+        //        Array.Copy(inputRegs, InputRegs, inputRegs.Length);
+        //    }
+        //    catch(Exception ex)
+        //    {
+        //        Console.WriteLine("Error copying registers!" + ex.Message);
+        //    }
+            
+        //}
+
+        public void ProcessWriteQueue()
         {
-            Array.Copy(holdingRegs, HoldingRegs, holdingRegs.Length);
-            Array.Copy(inputRegs, InputRegs, inputRegs.Length);
+            ClientHandler clientHandler;
+            byte[] transmitData;
+            byte[] receivedData;
+            ModBusFunctionCodes funcCode;
+
+            WriteQueueItem writeQueueItem;
+            while (writeQueue.Count > 0)
+            {
+                writeQueueItem = writeQueue.Dequeue();
+                receivedData = writeQueueItem.receivedData;
+                clientHandler = writeQueueItem.clientHandler;
+                funcCode = (ModBusFunctionCodes)receivedData[7];
+
+                transmitData = modBusFunctions[funcCode](receivedData);
+
+                clientHandler.queryDone.Reset();
+                clientHandler.ClientConnection.BeginSend(transmitData, 0,
+                                              transmitData.Length,
+                                              SocketFlags.None,
+                                              new AsyncCallback(SendCallback),
+                                              clientHandler);
+                clientHandler.queryDone.WaitOne();
+                clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
+                                    ClientHandler.BUFFER_SIZE,
+                                    SocketFlags.None,
+                                    new AsyncCallback(ReceiveCallback),
+                                    clientHandler);
+            }
         }
 
         private void ProcessingTimerCallback(object state)
@@ -138,7 +191,6 @@ namespace sPLCsimulator
                                                       CLIENT_TIMEOUT,
                                                       CLIENT_TIMEOUT);
 
-            queryDone.Reset();
             clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
                                                      ClientHandler.BUFFER_SIZE,
                                                      SocketFlags.None,
@@ -146,13 +198,12 @@ namespace sPLCsimulator
                                                      clientHandler);
         }
 
-        void NoActivityTimerCallback(object state)
+        private void NoActivityTimerCallback(object state)
         {
             ClientHandler clientHandler = (ClientHandler)state;
             if (--clientHandler.activityCount < 0)
             {
                 clientHandler.timeOut = true;
-                queryDone.Set();
                 Console.WriteLine("No activity from client, closing socket: "
                                    + DateTime.Now);
                 --connectionsCount;
@@ -186,33 +237,64 @@ namespace sPLCsimulator
 
                 if (modBusFunctions.ContainsKey(funcCode))
                 {
-                    transmitData = modBusFunctions[funcCode](receivedData);
+                    if (funcCode == ModBusFunctionCodes.WriteSingleReg
+                        || funcCode == ModBusFunctionCodes.WriteMultipleHoldingRegs)
+                    {
+                        writeQueue.Enqueue(new WriteQueueItem(clientHandler, receivedData));
+                        return;
+                    }
+                    else
+                    {
+                        transmitData = modBusFunctions[funcCode](receivedData);
+
+                        clientHandler.queryDone.Reset();
+                        clientHandler.ClientConnection.BeginSend(transmitData, 0,
+                                                      transmitData.Length,
+                                                      SocketFlags.None,
+                                                      new AsyncCallback(SendCallback),
+                                                      clientHandler);
+                        clientHandler.queryDone.WaitOne();
+                        clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
+                                            ClientHandler.BUFFER_SIZE,
+                                            SocketFlags.None,
+                                            new AsyncCallback(ReceiveCallback),
+                                            clientHandler);
+                    }
                 }
                 else
                 {
                     transmitData = ExceptionResponse(receivedData,
                                                      ModBusExceptionCodes.IllegalFunction);
-                }
 
-                clientHandler.ClientConnection.BeginSend(transmitData, 0,
-                                                      transmitData.Length,
-                                                      SocketFlags.None,
-                                                      new AsyncCallback(SendCallback),
-                                                      clientHandler);
-
-                queryDone.WaitOne();
-                if (!clientHandler.timeOut)
-                {
+                    clientHandler.queryDone.Reset();
+                    clientHandler.ClientConnection.BeginSend(transmitData, 0,
+                                                  transmitData.Length,
+                                                  SocketFlags.None,
+                                                  new AsyncCallback(SendCallback),
+                                                  clientHandler);
+                    clientHandler.queryDone.WaitOne();
                     clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
                                                          ClientHandler.BUFFER_SIZE,
                                                          SocketFlags.None,
                                                          new AsyncCallback(ReceiveCallback),
                                                          clientHandler);
                 }
-                else
-                {
-                    Console.WriteLine("Timeout: " + DateTime.Now);
-                }
+
+
+
+                //queryDone.WaitOne();
+                //if (!clientHandler.timeOut)
+                //{
+                //    clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
+                //                                         ClientHandler.BUFFER_SIZE,
+                //                                         SocketFlags.None,
+                //                                         new AsyncCallback(ReceiveCallback),
+                //                                         clientHandler);
+                //}
+                //else
+                //{
+                //    Console.WriteLine("Timeout: " + DateTime.Now);
+                //}
             }
         }
 
@@ -222,16 +304,15 @@ namespace sPLCsimulator
             {
                 ClientHandler clientHandler = (ClientHandler)ar.AsyncState;
                 int bytesSent = clientHandler.ClientConnection.EndSend(ar);
-                queryDone.Set();
+                clientHandler.queryDone.Set();
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.ToString());
             }
         }
-
+        
         #region ModBus Functions
-
         private byte[] ExceptionResponse(byte[] receivedData, 
                                          ModBusExceptionCodes exCode)
         {
@@ -359,7 +440,6 @@ namespace sPLCsimulator
             transmitData[6] = receivedData[6]; //Unit ID
             transmitData[7] = receivedData[7]; //Function Code
         }
-
         #endregion
 
     }
