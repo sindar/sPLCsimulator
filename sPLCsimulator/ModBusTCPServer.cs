@@ -230,8 +230,12 @@ namespace sPLCsimulator
             if (bytes > 0)
             {
                 clientHandler.activityCount = 1;
-                byte[] receivedData = clientHandler.Buffer;
+                byte[] receivedData = new byte[clientHandler.Buffer.Length];
                 byte[] transmitData;
+
+                Array.Copy(clientHandler.Buffer, receivedData,
+                           clientHandler.Buffer.Length);
+                
                 ModBusFunctionCodes funcCode 
                     = (ModBusFunctionCodes)receivedData[7];
 
@@ -240,32 +244,32 @@ namespace sPLCsimulator
                     if (funcCode == ModBusFunctionCodes.WriteSingleReg
                         || funcCode == ModBusFunctionCodes.WriteMultipleHoldingRegs)
                     {
-                        writeQueue.Enqueue(new WriteQueueItem(clientHandler, receivedData));
-                        return;
+                        if(writeQueue.Count < 16)
+                        {
+                            writeQueue.Enqueue(new WriteQueueItem(clientHandler,
+                                                                  receivedData));
+                            transmitData = null;
+                        }
+                        else
+                        {
+                            transmitData = ExceptionResponse(receivedData,
+                                                     ModBusExceptionCodes.SlaveDeviceBusy);
+                        }
+                            
                     }
                     else
                     {
                         transmitData = modBusFunctions[funcCode](receivedData);
-
-                        clientHandler.queryDone.Reset();
-                        clientHandler.ClientConnection.BeginSend(transmitData, 0,
-                                                      transmitData.Length,
-                                                      SocketFlags.None,
-                                                      new AsyncCallback(SendCallback),
-                                                      clientHandler);
-                        clientHandler.queryDone.WaitOne();
-                        clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
-                                            ClientHandler.BUFFER_SIZE,
-                                            SocketFlags.None,
-                                            new AsyncCallback(ReceiveCallback),
-                                            clientHandler);
                     }
                 }
                 else
                 {
                     transmitData = ExceptionResponse(receivedData,
                                                      ModBusExceptionCodes.IllegalFunction);
+                }
 
+                if (transmitData != null)
+                {
                     clientHandler.queryDone.Reset();
                     clientHandler.ClientConnection.BeginSend(transmitData, 0,
                                                   transmitData.Length,
@@ -273,14 +277,13 @@ namespace sPLCsimulator
                                                   new AsyncCallback(SendCallback),
                                                   clientHandler);
                     clientHandler.queryDone.WaitOne();
-                    clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
-                                                         ClientHandler.BUFFER_SIZE,
-                                                         SocketFlags.None,
-                                                         new AsyncCallback(ReceiveCallback),
-                                                         clientHandler);
                 }
 
-
+                clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
+                                            ClientHandler.BUFFER_SIZE,
+                                            SocketFlags.None,
+                                            new AsyncCallback(ReceiveCallback),
+                                            clientHandler);
 
                 //queryDone.WaitOne();
                 //if (!clientHandler.timeOut)
