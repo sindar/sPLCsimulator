@@ -28,8 +28,6 @@ namespace sPLCsimulator
             public const int BUFFER_SIZE = 256;
             public Socket ClientConnection { get; set; }
             public Timer noActivityTimer;
-            public bool timeOut = false;
-            public int activityCount = 0;
             public ManualResetEvent queryDone = new ManualResetEvent(false);
             byte[] buffer = new byte[BUFFER_SIZE];
             
@@ -185,11 +183,10 @@ namespace sPLCsimulator
             clientHandler.ClientConnection = serverSocket.EndAccept(ar);
             Console.WriteLine("Client connected: " + DateTime.Now);
 
-            clientHandler.timeOut = false;
             clientHandler.noActivityTimer = new Timer(NoActivityTimerCallback,
                                                       clientHandler,
-                                                      CLIENT_TIMEOUT,
-                                                      CLIENT_TIMEOUT);
+                                                      CLIENT_TIMEOUT, 
+                                                      Timeout.Infinite);
 
             clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
                                                      ClientHandler.BUFFER_SIZE,
@@ -201,15 +198,13 @@ namespace sPLCsimulator
         private void NoActivityTimerCallback(object state)
         {
             ClientHandler clientHandler = (ClientHandler)state;
-            if (--clientHandler.activityCount < 0)
-            {
-                clientHandler.timeOut = true;
-                Console.WriteLine("No activity from client, closing socket: "
-                                   + DateTime.Now);
-                --connectionsCount;
-                clientHandler.CloseConnection();
-                clientHandler.noActivityTimer.Dispose();
-            }
+            Console.WriteLine("No activity from client, closing socket: "
+                              + DateTime.Now);
+            --connectionsCount;
+            clientHandler.CloseConnection();
+            clientHandler.noActivityTimer.Dispose();
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
         }
 
         private void ReceiveCallback(IAsyncResult ar)
@@ -229,7 +224,9 @@ namespace sPLCsimulator
 
             if (bytes > 0)
             {
-                clientHandler.activityCount = 1;
+                clientHandler.noActivityTimer.Change(Timeout.Infinite,
+                                                     Timeout.Infinite);
+
                 byte[] receivedData = new byte[clientHandler.Buffer.Length];
                 byte[] transmitData;
 
@@ -279,25 +276,14 @@ namespace sPLCsimulator
                     clientHandler.queryDone.WaitOne();
                 }
 
+                clientHandler.noActivityTimer.Change(CLIENT_TIMEOUT,
+                                                     Timeout.Infinite);
+
                 clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
                                             ClientHandler.BUFFER_SIZE,
                                             SocketFlags.None,
                                             new AsyncCallback(ReceiveCallback),
                                             clientHandler);
-
-                //queryDone.WaitOne();
-                //if (!clientHandler.timeOut)
-                //{
-                //    clientHandler.ClientConnection.BeginReceive(clientHandler.Buffer, 0,
-                //                                         ClientHandler.BUFFER_SIZE,
-                //                                         SocketFlags.None,
-                //                                         new AsyncCallback(ReceiveCallback),
-                //                                         clientHandler);
-                //}
-                //else
-                //{
-                //    Console.WriteLine("Timeout: " + DateTime.Now);
-                //}
             }
         }
 
