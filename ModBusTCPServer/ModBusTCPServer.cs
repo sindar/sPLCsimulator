@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Collections.Generic;
 
-namespace sPLCsimulator
+namespace ModBusTCPServerLib
 {
     public class ModBusTCPServer
     {

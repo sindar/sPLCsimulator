@@ -1,4 +1,5 @@
 ﻿using System;
+using ModBusTCPServerLib;
 
 namespace sPLCsimulator
 {
@@ -15,7 +16,6 @@ namespace sPLCsimulator
             Console.WriteLine("ModBusTCP server is started: " + DateTime.Now);
             for (; ; )
             {
-                //MBTCPServer.MakeRegsCopy(HoldingRegs, InputRegs);
                 ++HoldingRegs[0];
                 --InputRegs[0];
                 MBTCPServer.ProcessWriteQueue();

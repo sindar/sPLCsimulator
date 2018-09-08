@@ -1,5 +1,5 @@
 ﻿using System;
-namespace sPLCsimulator
+namespace ModBusTCPServerLib
 {
     public enum ModBusFunctionCodes : byte
     {
