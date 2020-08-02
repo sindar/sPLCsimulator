@@ -10,11 +10,11 @@ namespace sPLCsimulator
 
         static void Main(string[] args)
         {
-            InitRegs();
+            //InitRegs();
             ModBusTCPServer MBTCPServer = new ModBusTCPServer(HoldingRegs, InputRegs);
             MBTCPServer.StartServer();
             Console.WriteLine("ModBusTCP server is started: " + DateTime.Now);
-            for (; ; )
+            for (;;)
             {
                 ++HoldingRegs[0];
                 --InputRegs[0];
