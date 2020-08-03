@@ -7,7 +7,7 @@
 
   <ItemGroup>
     <Reference Include="zModBusTCPServerLib">
-      <HintPath>..\..\ModBusTCPServer\bin\Release\net461\zModBusTCPServerLib.dll</HintPath>
+      <HintPath>..\..\zModBusTCPServer\bin\Release\net461\zModBusTCPServerLib.dll</HintPath>
     </Reference>
   </ItemGroup>
 </Project>
