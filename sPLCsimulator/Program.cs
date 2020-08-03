@@ -1,5 +1,5 @@
 ﻿using System;
-using ModBusTCPServerLib;
+using zModBusTCPServer;
 
 namespace sPLCsimulator
 {
