@@ -1,9 +1,8 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "sPLCsimulator", "sPLCsimulator\sPLCsimulator.csproj", "{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ModBusTCPServerLib", "ModBusTCPServer\ModBusTCPServerLib.csproj", "{538DC189-B8BB-4957-9511-396087A0798E}"
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30320.27
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "sPLCsimulator", "sPLCsimulator\sPLCsimulator.csproj", "{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,10 +14,12 @@ Global
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{538DC189-B8BB-4957-9511-396087A0798E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{538DC189-B8BB-4957-9511-396087A0798E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{538DC189-B8BB-4957-9511-396087A0798E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{538DC189-B8BB-4957-9511-396087A0798E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4379393F-5D2A-43BF-82AF-92FF25530F71}
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
 		Policies = $0

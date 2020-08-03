@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,5 +7,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ModBusTCPServer\ModBusTCPServerLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="ModBusTCPServerLib">
+      <HintPath>..\..\ModBusTCPServer\bin\Release\net461\ModBusTCPServerLib.dll</HintPath>
+    </Reference>
   </ItemGroup>
 </Project>
