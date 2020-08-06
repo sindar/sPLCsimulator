@@ -4,6 +4,8 @@ VisualStudioVersion = 16.0.30320.27
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "sPLCsimulator", "sPLCsimulator\sPLCsimulator.csproj", "{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "zModBusTCPServerLib", "..\zModBusTCPServer\zModBusTCPServerLib.csproj", "{D232A20A-890A-4FCC-9FA3-E9D5E45320BF}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -14,6 +16,10 @@ Global
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2F46D84B-38C1-4C26-A092-F687DFB1CAA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D232A20A-890A-4FCC-9FA3-E9D5E45320BF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D232A20A-890A-4FCC-9FA3-E9D5E45320BF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D232A20A-890A-4FCC-9FA3-E9D5E45320BF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D232A20A-890A-4FCC-9FA3-E9D5E45320BF}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

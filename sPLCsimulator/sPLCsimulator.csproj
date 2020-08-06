@@ -6,8 +6,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="zModBusTCPServerLib">
-      <HintPath>..\..\zModBusTCPServer\bin\Release\net461\zModBusTCPServerLib.dll</HintPath>
-    </Reference>
+    <ProjectReference Include="..\..\zModBusTCPServer\zModBusTCPServerLib.csproj" />
   </ItemGroup>
 </Project>
